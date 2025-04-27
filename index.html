@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>بازی موشک نئونی | Neon Space Shooter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- TailwindCSS -->
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <!-- Font Awesome -->
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" rel="stylesheet">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@700;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Vazirmatn', 'Tahoma', 'Arial', sans-serif;
+      background: #ffffff;
+      color: #fff;
+      min-height: 100vh;
+      min-width: 100vw;
+      overflow-x: hidden;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: linear-gradient(180deg, #57a40a 85%, #0ffcff 100%);
+      box-shadow: 0 0 80px #34e4ff3a;
+      border-radius: 16px;
+      border: 2.5px solid #12c6d8;
+      margin-bottom: 1rem;
+      touch-action: none;
+      height: 80vw;
+      max-height: 430px;
+      max-width: 360px;
+      width: 100vw;
+    }
+    #gameContainer {
+      direction: ltr;
+      user-select: none;
+      text-align: center;
+    }
+    .neon {
+      text-shadow: 0 0 8px #5ff2fe, 0 0 24px #ae49ff, 0 0 36px #ff3ace;
+      font-weight: bold;
+      letter-spacing: 2px;
+    }
+    #scoreBox {
+      background: rgba(31,21,100,0.76);
+      border: 2px solid #38bfea;
+      color: #fff;
+      font-size: 1.15rem;
+      border-radius: 10px;
+      padding: 0.15rem 1rem;
+      display: inline-block;
+      margin-top: .5rem;
+      margin-bottom: .3rem;
+      box-shadow: 0 0 10px #0ffcff99;
+      font-family: 'Vazirmatn', Arial, sans-serif;
+    }
+    .btn {
+      background:linear-gradient(90deg,#12c6d8 0%,#973eff 100%);
+      border: none;
+      padding: 0.4rem 2rem;
+      color: #fff;
+      border-radius: 7px;
+      font-size: 1.1rem;
+      text-shadow: 0 0 5px #7ffdff;
+      cursor: pointer;
+      box-shadow: 0 0 10px #7ffdff38;
+      transition: transform 0.2s;
+      margin-top: .6rem;
+      margin-bottom: .2rem;
+    }
+    .btn:hover {
+      transform: scale(1.07);
+      box-shadow: 0 0 16px #ae49ff67;
+    }
+    /* Responsive */
+    @media (max-width: 500px) {
+      canvas {
+        width: 98vw;
+        min-height: 290px;
+        max-height: 100vw;
+      }
+    }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen justify-between bg-black">
+  <header class="text-center py-8 mb-2">
+    <div class="text-3xl neon" style="color:#12c5ff;font-family:'Vazirmatn', Arial;">بازی موشک نئونی</div>
+    <div class="text-lg mt-2 tracking-wide text-pink-400">به شهاب سنگ‌ها شلیک کنید و رکورد بزنید!</div>
+  </header>
+  <main class="flex justify-center items-start flex-1 w-full">
+    <div id="gameContainer" class="w-full flex flex-col items-center">
+      <div id="scoreBox"><i class="fas fa-star text-yellow-300 ml-1"></i>امتیاز: <span id="score">0</span></div>
+      <canvas id="gameCanvas" width="360" height="430"></canvas>
+      <button class="btn" id="restartBtn" style="display: none;"><i class="fas fa-redo ml-1"></i>شروع مجدد</button>
+      <div id="msgBox" style="direction: rtl; margin-top: .5rem;"></div>
+    </div>
+  </main>
+  <footer class="w-full mt-4 py-5 text-center bg-gray-900 bg-opacity-70 border-t border-blue-600 neon text-lg">
+    <span><i class="fa fa-user-circle text-blue-300 ml-1"></i>عرفان علیخانی |</span>
+    <a href="https://www.erfan-web.ir" target="_blank" class="hover:text-pink-300 mx-2 underline">www.erfan-web.ir</a>
+  </footer>
+  <!-- Sound Effects (hidden audio tags, all free sfx) -->
+  <audio id="laserSfx" src="https://cdn.pixabay.com/audio/2022/08/20/audio_12b49fa8c7.mp3" preload="auto"></audio>
+  <audio id="explosionSfx" src="https://cdn.pixabay.com/audio/2022/08/20/audio_12e1965b0b.mp3" preload="auto"></audio>
+  <audio id="hitSfx" src="https://cdn.pixabay.com/audio/2022/08/20/audio_12e2bf98ae.mp3" preload="auto"></audio>
+  <script>
+    // ----------------------  Neon Space Shooter Game  ------------------------
+    const cvs = document.getElementById('gameCanvas');
+    const ctx = cvs.getContext('2d');
+    // Responsive
+    function handleResize() {
+      let w = Math.min(360, window.innerWidth*0.995);
+      let h = Math.min(430, w*1.15);
+      cvs.width = w;
+      cvs.height = h;
+    }
+    window.addEventListener('resize', handleResize);
+    handleResize();
+
+    // Neon color palette
+    const neonColors = ["#00eaff", "#bf5fff", "#ff36d9", "#37dbff", "#ffe078"];
+
+    // Audio
+    function playSfx(id,vol=1){
+      try {
+        const audio = document.getElementById(id);
+        audio.currentTime = 0;
+        audio.volume = vol;
+        audio.play();
+      } catch{}
+    }
+
+    // Game state variables
+    let player, meteors=[], bullets=[], score=0, bestScore=0, frames=0, gameOver=false, started=false, difficulty=1;
+
+    // ----- Player Object -----
+    function getPlayer(canvasW, canvasH) {
+      return {
+        w: canvasW*0.13,
+        h: canvasH*0.065,
+        x: canvasW/2 - canvasW*0.13/2,
+        y: canvasH- canvasH*0.09,
+        speed: canvasW*0.018,
+        color: "#12c5ff",
+        fireCooldown: 0,
+        moveTo: null // {x,y}
+      };
+    }
+
+    // ----- Initialize all -----
+    function resetGame(){
+      player = getPlayer(cvs.width, cvs.height);
+      meteors = [];
+      bullets = [];
+      score = 0;
+      frames = 0;
+      difficulty = 1;
+      started = true;
+      gameOver = false;
+      document.getElementById('restartBtn').style.display = 'none';
+      document.getElementById('msgBox').innerHTML = "";
+      mainLoop();
+    }
+
+    // ----- Draw Neon Rocket -----
+    function drawPlayer(p){
+      ctx.save();
+      ctx.translate(p.x + p.w/2, p.y + p.h/2);
+      ctx.shadowColor = neonColors[Math.floor(Math.random()*3)];
+      ctx.shadowBlur = 30;
+      // Rocket body
+      ctx.beginPath();
+      ctx.moveTo(0,-p.h/2);
+      ctx.lineTo(p.w/2, p.h/2);
+      ctx.lineTo(-p.w/2, p.h/2);
+      ctx.closePath();
+      let grad=ctx.createLinearGradient(0,-p.h/2,0,p.h/2);
+      grad.addColorStop(0,"#12c5ff");
+      grad.addColorStop(0.5,"#39fafc");
+      grad.addColorStop(1,"#af5cff");
+      ctx.fillStyle = grad;
+      ctx.fill();
+      // Neon outline
+      ctx.lineWidth=3.2;
+      ctx.strokeStyle="#ff36d9";
+      ctx.stroke();
+      // Window
+      ctx.beginPath();
+      ctx.ellipse(0, -p.h/8, p.w/10, p.h/6, 0, 0, 2*Math.PI);
+      ctx.fillStyle="#fff6";
+      ctx.fill();
+      // Wings
+      ctx.beginPath();
+      ctx.moveTo(-p.w/2.2, p.h/3);
+      ctx.lineTo(-p.w/1.8, p.h/2);
+      ctx.lineTo(0,p.h/6);
+      ctx.closePath();
+      ctx.fillStyle='#8c6cfc';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(p.w/2.2, p.h/3);
+      ctx.lineTo(p.w/1.8, p.h/2);
+      ctx.lineTo(0,p.h/6);
+      ctx.closePath();
+      ctx.fillStyle='#eb47ff';
+      ctx.fill();
+      // Neon thruster fire
+      ctx.beginPath();
+      ctx.moveTo(-p.w/5, p.h/2);
+      ctx.lineTo(0, p.h/2 + (Math.random()*p.h/1.4));
+      ctx.lineTo(p.w/5,p.h/2);
+      ctx.closePath();
+      let grad2=ctx.createLinearGradient(0,p.h/2,0, p.h);
+      grad2.addColorStop(0,'#fff');
+      grad2.addColorStop(0.45,'#1dfff4bb');
+      grad2.addColorStop(1, '#ff36d988');
+      ctx.fillStyle=grad2;
+      ctx.globalAlpha=0.74+Math.random()*0.18;
+      ctx.shadowBlur=40;
+      ctx.shadowColor='#56ffe9';
+      ctx.fill();
+      ctx.globalAlpha=1;
+      ctx.restore();
+    }
+
+    // ----- Draw Bullet -----
+    function drawBullet(b){
+      ctx.save();
+      ctx.globalAlpha = 0.82;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+      ctx.closePath();
+      let grad=ctx.createRadialGradient(b.x, b.y, b.r*0.2, b.x, b.y, b.r*2.3);
+      grad.addColorStop(0, '#fff');
+      grad.addColorStop(0.42, '#5ff2fe');
+      grad.addColorStop(0.79, '#ae49ff88');
+      grad.addColorStop(1, '#f36cff05');
+      ctx.fillStyle = grad;
+      ctx.shadowColor = '#41fdff';
+      ctx.shadowBlur = 17;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
+    // ----- Draw Meteor -----
+    function drawMeteor(m){
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.r, 0, Math.PI*2);
+      ctx.closePath();
+      let grad=ctx.createRadialGradient(m.x, m.y, m.r*0.2, m.x, m.y, m.r);
+      grad.addColorStop(0, '#ffe078');
+      grad.addColorStop(0.22,'#d389ff');
+      grad.addColorStop(0.53, '#ffacf2');
+      grad.addColorStop(1, '#1c0c2d66');
+      ctx.shadowColor = '#ff36d9';
+      ctx.shadowBlur = 23;
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.restore();
+      // Random neon lines
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      for(let a=0;a<3;a++){
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, m.r-2, (a*2*Math.PI)/3 + m.s, (a*2*Math.PI)/3 + m.s+0.35);
+        ctx.strokeStyle= neonColors[(a+1)%neonColors.length];
+        ctx.lineWidth=2;
+        ctx.shadowColor=ctx.strokeStyle;
+        ctx.shadowBlur=14;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // ----- Neon Explosion Effect -----
+    function drawExplosion(x,y,r){
+      let parts = 10+(Math.random()*7);
+      let clr = neonColors[Math.floor(Math.random()*neonColors.length)];
+      for(let i=0;i<parts;i++){
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(x+(Math.cos(i*2*Math.PI/parts)*r), y+(Math.sin(i*2*Math.PI/parts)*r), r*0.28+Math.random()*2, 0, 2*Math.PI);
+        ctx.globalAlpha = 0.61;
+        ctx.shadowColor = clr;
+        ctx.shadowBlur = 12+Math.random()*13;
+        ctx.fillStyle = clr;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // ----- Draw Neon Background Stars -----
+    function drawStars(){
+      for(let i=0;i<36;i++){
+        let x = Math.random()*cvs.width, y= Math.random()*cvs.height*0.95;
+        ctx.save();
+        let s = Math.random()*1.2+0.2;
+        ctx.beginPath();
+        ctx.arc(x, y, s, 0, Math.PI*2);
+        ctx.globalAlpha = Math.random()*0.8+0.19;
+        ctx.shadowColor = neonColors[Math.floor((i*i)%neonColors.length)];
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // ----- Spawn Meteors -----
+    function spawnMeteor(){
+      // Each meteor has random radius, speed and position
+      let maxR = cvs.width*0.085; // max meteor size
+      let minR = cvs.width*0.036;
+      let r = minR + Math.random()*(maxR-minR);
+      let mx = Math.random()*(cvs.width-r*2)+r;
+      let vy = cvs.height*0.004 + Math.random()*cvs.height*0.006 + difficulty*cvs.height*0.0012;
+      return {x:mx, y:-r, r:r, vy:vy, s:Math.random()*2*Math.PI};
+    }
+
+    // ----- Main Loop -----
+    function mainLoop(){
+      // Difficulty increase: maybe every 40 points
+      if(score>0 && score%40===0)
+        difficulty = 1 + Math.floor(score/40)*0.4;
+      // Step
+      ctx.clearRect(0,0, cvs.width, cvs.height);
+      drawStars();
+
+      // Draw and update player
+      drawPlayer(player);
+
+      // Bullets
+      for(let b of bullets) drawBullet(b);
+      for(let b of bullets) b.y -= cvs.height*0.019+1.2*difficulty;
+
+      // Remove bullets off screen
+      bullets = bullets.filter(b => b.y>-b.r);
+
+      // Fire bullet if possible
+      player.fireCooldown--;
+      // Touch, mouse, or auto-fire
+      if(player.fireCooldown<=0){
+        bullets.push({
+          x: player.x+player.w/2, y: player.y+3, r: cvs.width*0.018+Math.random()*1.2,
+          color: "#00eaff"
+        });
+        playSfx('laserSfx', 0.19);
+        player.fireCooldown = Math.floor(17 - Math.min(13, difficulty*1.5));
+      }
+
+      // Spawn new meteors, more as difficulty grows
+      if(frames%(36-Math.floor(difficulty*3)+Math.floor(Math.random()*5)) === 0){
+        meteors.push(spawnMeteor());
+      }
+      // Increase meteor spawn at higher difficulty
+      if (difficulty > 2 && Math.random()<0.015*difficulty){
+        meteors.push(spawnMeteor());
+      }
+
+      // Move and draw meteors
+      for(let m of meteors){
+        m.y += m.vy;
+        m.s += 0.02 + Math.min(0.09, difficulty*0.016);
+        drawMeteor(m);
+      }
+
+      // Remove meteors that go below screen
+      meteors = meteors.filter(m => m.y-m.r < cvs.height);
+
+      // Collision detection (bullet <-> meteor)
+      let toRemoveBullets=[], toRemoveMeteors=[];
+      for(let i=0;i<meteors.length;i++){
+        let m=meteors[i];
+        for(let j=0;j<bullets.length;j++){
+          let b=bullets[j];
+          let dx=m.x-b.x, dy=m.y-b.y;
+          if(Math.sqrt(dx*dx+dy*dy) < m.r+b.r){
+            drawExplosion(m.x, m.y, m.r);
+            playSfx('explosionSfx', 0.23);
+            score+= 1+Math.floor(m.r);
+            toRemoveBullets.push(j);
+            toRemoveMeteors.push(i);
+            break;
+          }
+        }
+      }
+      // Remove destroyed objects
+      toRemoveBullets = [...new Set(toRemoveBullets)];
+      toRemoveMeteors = [...new Set(toRemoveMeteors)];
+      bullets = bullets.filter((_,i)=>!toRemoveBullets.includes(i));
+      meteors = meteors.filter((_,i)=>!toRemoveMeteors.includes(i));
+
+      // Meteor <-> Player collision
+      for(let m of meteors){
+        let cx=player.x+player.w/2, cy=player.y+player.h*0.69;
+        let mcx=m.x, mcy=m.y;
+        // Approximate player as simple ellipse
+        let rx=player.w/2, ry=player.h/1.6;
+        let dx = Math.abs(mcx-cx), dy = Math.abs(mcy-cy);
+        if( dx < rx+m.r-3 && dy < ry+m.r-3 ) {
+          // Game Over
+          drawExplosion(cx,cy,rx);
+          playSfx('hitSfx', 0.4);
+          setTimeout(()=>gameOverEffect(), 200);
+          started = false;
+          gameOver = true;
+          drawPlayer(player)
+          break;
+        }
+      }
+
+      // Display score
+      document.getElementById('score').textContent = score;
+
+      frames++;
+      if(started) requestAnimationFrame(mainLoop);
+    }
+
+    // ---- Game Over Handler ----
+    function gameOverEffect(){
+      // Show Game Over
+      document.getElementById('restartBtn').style.display = 'inline-block';
+      if(score>bestScore) bestScore = score;
+      document.getElementById('msgBox').innerHTML =
+      "<span class='text-xl font-bold text-pink-400'>پایان بازی!</span><br>"+
+      "<span class='text-indigo-400'>امتیاز شما: </span><b style='color:#ececec'>" + score + "</b><br>" +
+      "<span class='text-yellow-300'><i class='fas fa-trophy mx-1'></i>بهترین رکورد: " + bestScore + "</span>";
+    }
+
+    // Event Listeners ----
+    // Mouse
+    cvs.addEventListener('mousemove', function(e){
+      if (window.innerWidth <= 540) return;
+      let rect = cvs.getBoundingClientRect();
+      let mx = e.clientX - rect.left;
+      player.x = Math.max(0,Math.min(cvs.width-player.w, mx-player.w/2));
+    });
+    // Touch move
+    cvs.addEventListener('touchmove', function(e){
+      let rect = cvs.getBoundingClientRect();
+      let mx = e.touches[0].clientX - rect.left;
+      player.x = Math.max(0,Math.min(cvs.width-player.w, mx-player.w/2));
+      e.preventDefault();
+    },{passive:false});
+
+    // Restart button
+    document.getElementById('restartBtn').onclick = resetGame;
+
+    // Start on click/touch if not started
+    cvs.addEventListener('pointerdown', function(){
+      if(gameOver || !started) resetGame();
+    });
+
+    // ---- Start Game ----
+    window.onload = ()=>{
+      document.getElementById('msgBox').innerHTML='<span class="text-rose-400">برای شروع بازی کلیک یا لمس کنید</span>';
+      resetGame();
+    };
+  </script>
+</body>
+</html>
+
